@@ -1,0 +1,38 @@
+{
+  "schedule": {
+    "mode": "calendar",
+    "on_calendar": "*-*-* 02:00:00",
+    "persistent": true
+  },
+  "global": {
+    "telegram_max_bytes": 47185920
+  },
+  "projects": [
+    {
+      "name": "my-laravel-app",
+      "project_path": "/var/www/html",
+      "telegram": {
+        "bot_token": "YOUR_BOT_TOKEN",
+        "chat_id": "-1001234567890"
+      },
+      "database": {
+        "driver": "mysql",
+        "host": "127.0.0.1",
+        "port": 3306,
+        "database": "laravel",
+        "username": "laravel",
+        "password": "secret"
+      },
+      "tar_excludes": [
+        "vendor",
+        "node_modules",
+        ".git",
+        "storage/logs",
+        "storage/framework/cache",
+        "storage/framework/sessions",
+        "storage/framework/views",
+        "bootstrap/cache"
+      ]
+    }
+  ]
+}

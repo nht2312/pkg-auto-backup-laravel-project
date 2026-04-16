@@ -1,0 +1,13 @@
+[Unit]
+Description=Laravel Telegram Backup (oneshot)
+Documentation=file:/usr/share/doc/laravel-telegram-backup/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/laravel-telegram-backup run
+StandardOutput=journal
+StandardError=journal
+# Do not fail the unit if config is missing; skip run cleanly
+ExecCondition=/usr/bin/test -f /etc/laravel-telegram-backup/config.json

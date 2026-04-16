@@ -1,0 +1,428 @@
+#!/usr/bin/python3
+"""
+Laravel backup: archive source + DB dump, upload to Telegram.
+Config: /etc/laravel-telegram-backup/config.json
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+from typing import Any
+
+CONFIG_PATH = Path("/etc/laravel-telegram-backup/config.json")
+TIMER_DROPIN_DIR = Path("/etc/systemd/system/laravel-telegram-backup.timer.d")
+TIMER_DROPIN_FILE = TIMER_DROPIN_DIR / "schedule.conf"
+DEFAULT_MAX_BYTES = 45 * 1024 * 1024  # under Telegram ~50MB bot limit
+
+log = logging.getLogger("laravel-telegram-backup")
+
+
+def setup_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+        stream=sys.stderr,
+    )
+
+
+def load_config(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing config: {path}")
+    with path.open(encoding="utf-8") as f:
+        return json.load(f)
+
+
+def validate_config(data: dict[str, Any]) -> None:
+    if "projects" not in data or not isinstance(data["projects"], list):
+        raise ValueError("config must contain a list 'projects'")
+    for i, p in enumerate(data["projects"]):
+        if not isinstance(p, dict):
+            raise ValueError(f"projects[{i}] must be an object")
+        for key in ("name", "project_path", "telegram", "database"):
+            if key not in p:
+                raise ValueError(f"projects[{i}] missing '{key}'")
+        tg = p["telegram"]
+        if "bot_token" not in tg or "chat_id" not in tg:
+            raise ValueError(f"projects[{i}].telegram needs bot_token and chat_id")
+        db = p["database"]
+        if "driver" not in db:
+            raise ValueError(f"projects[{i}].database needs driver")
+        driver = db["driver"].lower()
+        if driver == "sqlite":
+            if "database" not in db:
+                raise ValueError(f"projects[{i}].sqlite needs database path")
+        else:
+            for k in ("host", "database", "username", "password"):
+                if k not in db:
+                    raise ValueError(f"projects[{i}].database missing '{k}'")
+
+
+def schedule_to_timer_ini(schedule: dict[str, Any]) -> str:
+    mode = schedule.get("mode", "calendar")
+    lines = ["[Timer]"]
+    if mode == "interval":
+        every = schedule.get("every", "24h")
+        boot = schedule.get("on_boot_sec", "2min")
+        lines.append("OnCalendar=")
+        lines.append(f"OnUnitActiveSec={every}")
+        lines.append(f"OnBootSec={boot}")
+    else:
+        cal = schedule.get("on_calendar", "daily")
+        lines.append(f"OnCalendar={cal}")
+        lines.append("OnUnitActiveSec=")
+        lines.append("OnBootSec=")
+    persist = schedule.get("persistent", True)
+    lines.append(f"Persistent={'true' if persist else 'false'}")
+    return "\n".join(lines) + "\n"
+
+
+def cmd_sync_schedule(config_path: Path) -> int:
+    data = load_config(config_path)
+    validate_config(data)
+    schedule = data.get("schedule") or {
+        "mode": "calendar",
+        "on_calendar": "daily",
+        "persistent": True,
+    }
+    ini = schedule_to_timer_ini(schedule)
+    TIMER_DROPIN_DIR.mkdir(parents=True, exist_ok=True)
+    TIMER_DROPIN_FILE.write_text(ini, encoding="utf-8")
+    os.chmod(TIMER_DROPIN_FILE, 0o644)
+    log.info("Wrote %s", TIMER_DROPIN_FILE)
+    subprocess.run(["systemctl", "daemon-reload"], check=False)
+    r = subprocess.run(
+        ["systemctl", "restart", "laravel-telegram-backup.timer"],
+        check=False,
+    )
+    if r.returncode != 0:
+        log.warning(
+            "systemctl restart laravel-telegram-backup.timer returned %s (timer may not be installed yet)",
+            r.returncode,
+        )
+    return 0
+
+
+def cmd_validate(config_path: Path) -> int:
+    data = load_config(config_path)
+    validate_config(data)
+    log.info("Config OK: %s project(s)", len(data["projects"]))
+    return 0
+
+
+def tar_source(
+    project_path: Path,
+    excludes: list[str],
+    out_tar_gz: Path,
+) -> None:
+    if not project_path.is_dir():
+        raise FileNotFoundError(f"project_path is not a directory: {project_path}")
+    artisan = project_path / "artisan"
+    if not artisan.is_file():
+        log.warning("No artisan in %s — not a typical Laravel root?", project_path)
+
+    exclude_args: list[str] = []
+    for pat in excludes:
+        exclude_args.extend(["--exclude", pat])
+
+    # GNU tar: create gzip archive; -C chdir
+    cmd = [
+        "tar",
+        "-C",
+        str(project_path),
+        "-czf",
+        str(out_tar_gz),
+        *exclude_args,
+        ".",
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"tar source failed: {r.stderr or r.stdout}")
+
+
+def dump_mysql(db: dict[str, Any], out_sql: Path) -> None:
+    port = int(db.get("port", 3306))
+    cnf = tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".cnf",
+        delete=False,
+        encoding="utf-8",
+    )
+    try:
+        cnf.write("[client]\n")
+        cnf.write(f"host={db['host']}\n")
+        cnf.write(f"port={port}\n")
+        cnf.write(f"user={db['username']}\n")
+        cnf.write(f"password={db['password']}\n")
+        cnf.close()
+        os.chmod(cnf.name, 0o600)
+        cmd = [
+            "mysqldump",
+            f"--defaults-extra-file={cnf.name}",
+            "--single-transaction",
+            "--quick",
+            db["database"],
+        ]
+        with out_sql.open("wb") as f:
+            r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE)
+        if r.returncode != 0:
+            err = (r.stderr or b"").decode("utf-8", errors="replace")
+            raise RuntimeError(f"mysqldump failed: {err}")
+    finally:
+        try:
+            os.unlink(cnf.name)
+        except OSError:
+            pass
+
+
+def dump_pgsql(db: dict[str, Any], out_sql: Path) -> None:
+    port = str(db.get("port", 5432))
+    env = os.environ.copy()
+    env["PGPASSWORD"] = str(db["password"])
+    cmd = [
+        "pg_dump",
+        "-h",
+        str(db["host"]),
+        "-p",
+        port,
+        "-U",
+        str(db["username"]),
+        "-d",
+        str(db["database"]),
+        "-f",
+        str(out_sql),
+    ]
+    r = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"pg_dump failed: {r.stderr or r.stdout}")
+
+
+def dump_sqlite(db: dict[str, Any], out_sql: Path) -> None:
+    db_path = Path(db["database"]).expanduser()
+    if not db_path.is_file():
+        raise FileNotFoundError(f"SQLite file not found: {db_path}")
+    cmd = ["sqlite3", str(db_path), ".dump"]
+    with out_sql.open("wb") as f:
+        r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE)
+    if r.returncode != 0:
+        err = (r.stderr or b"").decode("utf-8", errors="replace")
+        raise RuntimeError(f"sqlite3 dump failed: {err}")
+
+
+def dump_database(db: dict[str, Any], out_sql: Path) -> None:
+    driver = db["driver"].lower()
+    if driver in ("mysql", "mariadb"):
+        dump_mysql(db, out_sql)
+    elif driver in ("pgsql", "postgres", "postgresql"):
+        dump_pgsql(db, out_sql)
+    elif driver == "sqlite":
+        dump_sqlite(db, out_sql)
+    else:
+        raise ValueError(f"Unsupported database driver: {driver}")
+
+
+def make_final_archive(
+    work: Path,
+    source_archive: Path,
+    db_dump: Path,
+    out_path: Path,
+) -> None:
+    """Bundle source.tar.gz + db dump into one tar.gz."""
+    cmd = [
+        "tar",
+        "-czf",
+        str(out_path),
+        "-C",
+        str(work),
+        os.path.basename(source_archive),
+        os.path.basename(db_dump),
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"bundle tar failed: {r.stderr or r.stdout}")
+
+
+def split_file(path: Path, chunk_bytes: int, out_dir: Path) -> list[Path]:
+    out_prefix = out_dir / path.name
+    subprocess.run(
+        ["split", "-b", str(chunk_bytes), str(path), str(out_prefix) + ".part"],
+        check=True,
+    )
+    return sorted(out_dir.glob(path.name + ".part*"))
+
+
+def send_document(
+    bot_token: str,
+    chat_id: str,
+    file_path: Path,
+    caption: str,
+) -> None:
+    url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
+    cmd = [
+        "curl",
+        "-sS",
+        "-f",
+        "-X",
+        "POST",
+        url,
+        "-F",
+        f"chat_id={chat_id}",
+        "-F",
+        f"caption={caption}",
+        "-F",
+        f"document=@{file_path}",
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(
+            f"curl failed ({r.returncode}): {r.stderr or r.stdout}"
+        )
+    try:
+        body = json.loads(r.stdout)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Telegram API non-JSON: {r.stdout[:500]}") from e
+    if not body.get("ok"):
+        raise RuntimeError(f"Telegram API error: {body}")
+
+
+def run_one_project(
+    proj: dict[str, Any],
+    global_cfg: dict[str, Any],
+    work_root: Path,
+) -> None:
+    name = proj["name"]
+    project_path = Path(proj["project_path"]).expanduser().resolve()
+    tg = proj["telegram"]
+    token = tg["bot_token"]
+    chat_id = str(tg["chat_id"])
+    db = proj["database"]
+
+    default_excludes = [
+        "vendor",
+        "node_modules",
+        ".git",
+        "storage/logs",
+        "storage/framework/cache",
+        "storage/framework/sessions",
+        "storage/framework/views",
+        "bootstrap/cache",
+    ]
+    ex = proj.get("tar_excludes")
+    excludes = list(default_excludes) if ex is None else list(ex)
+
+    max_bytes = int(global_cfg.get("telegram_max_bytes", DEFAULT_MAX_BYTES))
+
+    ts = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    work = work_root / f"{name}-{ts}"
+    work.mkdir(parents=True)
+
+    source_arc = work / "source.tar.gz"
+    db_sql = work / "database.sql"
+    final_arc = work / f"laravel-backup-{name}-{ts}.tar.gz"
+
+    log.info("[%s] Archiving source…", name)
+    tar_source(project_path, excludes, source_arc)
+
+    log.info("[%s] Dumping database (%s)…", name, db["driver"])
+    dump_database(db, db_sql)
+
+    log.info("[%s] Creating bundle…", name)
+    make_final_archive(work, source_arc, db_sql, final_arc)
+
+    size = final_arc.stat().st_size
+    log.info("[%s] Bundle size %s bytes", name, size)
+
+    base_caption = f"{name} | {ts} UTC"
+
+    if size <= max_bytes:
+        send_document(token, chat_id, final_arc, base_caption)
+        log.info("[%s] Uploaded single archive", name)
+        return
+
+    log.info("[%s] Splitting for Telegram (chunk max %s bytes)…", name, max_bytes)
+    parts_dir = work / "parts"
+    parts_dir.mkdir()
+    parts = split_file(final_arc, max_bytes, parts_dir)
+    total = len(parts)
+    for i, part in enumerate(parts, start=1):
+        cap = f"{base_caption} | part {i}/{total}"
+        send_document(token, chat_id, part, cap)
+        log.info("[%s] Uploaded part %s/%s", name, i, total)
+
+
+def cmd_run(config_path: Path) -> int:
+    data = load_config(config_path)
+    validate_config(data)
+    projects = data["projects"]
+    if not projects:
+        log.info("No projects configured; nothing to do.")
+        return 0
+
+    global_cfg = data.get("global") or {}
+
+    failures = 0
+    with tempfile.TemporaryDirectory(prefix="ltb-") as tmp:
+        root = Path(tmp)
+        for proj in projects:
+            try:
+                run_one_project(proj, global_cfg, root)
+            except Exception as e:
+                failures += 1
+                log.error("[%s] FAILED: %s", proj.get("name", "?"), e)
+
+    return 1 if failures else 0
+
+
+def main(argv: list[str]) -> int:
+    setup_logging()
+    parser = argparse.ArgumentParser(description="Laravel Telegram backup")
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="run",
+        choices=["run", "sync-schedule", "validate-config"],
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=CONFIG_PATH,
+        help=f"Config file (default: {CONFIG_PATH})",
+    )
+    args = parser.parse_args(argv)
+
+    if args.command == "run":
+        try:
+            return cmd_run(args.config)
+        except FileNotFoundError as e:
+            log.error("%s", e)
+            return 1
+        except (ValueError, json.JSONDecodeError) as e:
+            log.error("Invalid config: %s", e)
+            return 1
+
+    if args.command == "sync-schedule":
+        try:
+            return cmd_sync_schedule(args.config)
+        except Exception as e:
+            log.error("%s", e)
+            return 1
+
+    if args.command == "validate-config":
+        try:
+            return cmd_validate(args.config)
+        except Exception as e:
+            log.error("%s", e)
+            return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
