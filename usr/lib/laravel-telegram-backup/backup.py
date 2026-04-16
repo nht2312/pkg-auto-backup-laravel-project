@@ -188,8 +188,23 @@ def zip_source(
     if not artisan.is_file():
         log.warning("No artisan in %s — not a typical Laravel root?", project_path)
 
-    exclude_args: list[str] = []
+    normalized_excludes: list[str] = []
     for pat in excludes:
+        norm = pat.strip().replace("\\", "/")
+        if not norm:
+            continue
+        if norm.startswith("./"):
+            norm = norm[2:]
+        if norm.endswith("/"):
+            norm = f"{norm}*"
+        elif not any(ch in norm for ch in "*?[]"):
+            maybe_dir = project_path / norm
+            if maybe_dir.is_dir():
+                norm = f"{norm}/*"
+        normalized_excludes.append(norm)
+
+    exclude_args: list[str] = []
+    for pat in normalized_excludes:
         exclude_args.extend(["-x", pat])
 
     cmd = [
@@ -197,8 +212,8 @@ def zip_source(
         "-r",
         "-q",
         str(out_zip),
-        *exclude_args,
         ".",
+        *exclude_args,
     ]
     r = subprocess.run(cmd, cwd=project_path, capture_output=True, text=True)
     if r.returncode != 0:
