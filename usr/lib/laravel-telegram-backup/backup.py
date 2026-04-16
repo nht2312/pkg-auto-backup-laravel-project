@@ -19,6 +19,57 @@ import time
 from pathlib import Path
 from typing import Any
 
+
+def parse_timespan_seconds(value: Any) -> int | None:
+    """
+    Parse common systemd-like shorthand into seconds.
+
+    Examples:
+      - "120s" -> 120
+      - "5min" -> 300
+      - "2min" -> 120
+      - "24h" -> 86400
+      - "1d"   -> 86400
+    """
+    if value is None:
+        return None
+    raw = str(value).strip().lower()
+    if not raw:
+        return None
+    try:
+        if raw.endswith("s"):
+            return int(raw[:-1].strip())
+        if raw.endswith("min"):
+            return int(raw[: -len("min")].strip()) * 60
+        if raw.endswith("h"):
+            return int(raw[: -len("h")].strip()) * 3600
+        if raw.endswith("d"):
+            return int(raw[: -len("d")].strip()) * 86400
+        # Some users might provide seconds as a plain number.
+        if raw.isdigit():
+            return int(raw)
+    except ValueError:
+        return None
+    return None
+
+
+def warn_if_interval_too_short(data: dict[str, Any]) -> None:
+    schedule = data.get("schedule") or {}
+    if schedule.get("mode") != "interval":
+        return
+
+    every = schedule.get("every")
+    seconds = parse_timespan_seconds(every)
+    if seconds is None:
+        return
+
+    if seconds < 300:
+        log.warning(
+            "schedule.every=%s (%ss) is < 300s; interval this short can make systemd timer behavior unstable. Recommended: >=300s.",
+            every,
+            seconds,
+        )
+
 CONFIG_PATH = Path("/etc/laravel-telegram-backup/config.json")
 DEFAULTS_CONFIG_PATH = Path(
     "/usr/share/doc/laravel-telegram-backup/examples/config.json"
@@ -128,6 +179,7 @@ def schedule_to_timer_ini(schedule: dict[str, Any]) -> str:
 def cmd_sync_schedule(config_path: Path) -> int:
     data = load_config(config_path)
     validate_config(data)
+    warn_if_interval_too_short(data)
     schedule = data.get("schedule") or {
         "mode": "calendar",
         "on_calendar": "daily",
@@ -154,6 +206,7 @@ def cmd_sync_schedule(config_path: Path) -> int:
 def cmd_validate(config_path: Path) -> int:
     data = load_config(config_path)
     validate_config(data)
+    warn_if_interval_too_short(data)
     log.info("Config OK: %s project(s)", len(data["projects"]))
     return 0
 
@@ -554,8 +607,14 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "command",
         nargs="?",
-        default="run",
-        choices=["run", "sync-schedule", "validate-config", "config-migrate"],
+        default="help",
+        choices=[
+            "run",
+            "sync-schedule",
+            "validate-config",
+            "config-migrate",
+            "help",
+        ],
     )
     parser.add_argument(
         "--config",
@@ -570,6 +629,21 @@ def main(argv: list[str]) -> int:
         help=f"Defaults config for migration (default: {DEFAULTS_CONFIG_PATH})",
     )
     args = parser.parse_args(argv)
+
+    if args.command == "help":
+        log.info("Usage:")
+        log.info("  lpb run")
+        log.info("  lpb validate-config")
+        log.info("  lpb sync-schedule")
+        log.info("")
+        log.info("Post-install steps (recommended):")
+        log.info("1) Edit config: sudo nano /etc/laravel-telegram-backup/config.json")
+        log.info("2) Validate:     sudo lpb validate-config")
+        log.info("3) Sync timer:   sudo lpb sync-schedule")
+        log.info("4) Test run:     sudo lpb run")
+        log.info("5) Check logs:   sudo systemctl status laravel-telegram-backup.timer")
+        log.info("                 journalctl -u laravel-telegram-backup.service -n 100 --no-pager")
+        return 0
 
     if args.command == "run":
         try:
