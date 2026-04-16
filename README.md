@@ -10,7 +10,8 @@ Automatically backs up multiple Laravel projects (source code + database) and up
 - Backup multiple projects from one JSON config
 - Archive source (`tar.gz`) with exclude patterns
 - Database dump support: MySQL/MariaDB, PostgreSQL, SQLite
-- Auto split archive when exceeding Telegram bot upload limit
+- Upload source and DB as separate archives (easier to inspect)
+- Auto split each archive when exceeding Telegram bot upload limit
 - Flexible scheduling (`OnCalendar` or `OnUnitActiveSec`)
 
 ## Quick Install for End Users (One Command)

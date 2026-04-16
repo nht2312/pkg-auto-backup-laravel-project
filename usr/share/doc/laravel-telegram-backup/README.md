@@ -88,7 +88,11 @@ Lệnh này ghi file drop-in cho timer và `daemon-reload` + restart timer.
 
 ### File lớn hơn ~50 MB
 
-Gói tự **chia nhỏ** archive và gửi nhiều tin (caption ghi `part i/n`). Có thể chỉnh ngưỡng trong `global.telegram_max_bytes` (mặc định `47185920` = 45MiB). Nếu set cao hơn, hệ thống sẽ tự giới hạn về ngưỡng an toàn để tránh lỗi Telegram `413`.
+Gói gửi **2 file độc lập** để dễ kiểm tra:
+- `source.tar.gz` (source code)
+- `database.sql.gz` (database dump)
+
+Nếu một file vượt ngưỡng, hệ thống tự **chia nhỏ file đó** và gửi nhiều tin (caption ghi `part i/n`). Có thể chỉnh ngưỡng trong `global.telegram_max_bytes` (mặc định `47185920` = 45MiB). Nếu set cao hơn, hệ thống sẽ tự giới hạn về ngưỡng an toàn để tránh lỗi Telegram `413`.
 
 ## Lệnh
 

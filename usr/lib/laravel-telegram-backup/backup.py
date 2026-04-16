@@ -286,25 +286,13 @@ def dump_database(db: dict[str, Any], out_sql: Path) -> None:
         raise ValueError(f"Unsupported database driver: {driver}")
 
 
-def make_final_archive(
-    work: Path,
-    source_archive: Path,
-    db_dump: Path,
-    out_path: Path,
-) -> None:
-    """Bundle source.tar.gz + db dump into one tar.gz."""
-    cmd = [
-        "tar",
-        "-czf",
-        str(out_path),
-        "-C",
-        str(work),
-        os.path.basename(source_archive),
-        os.path.basename(db_dump),
-    ]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+def gzip_file(src: Path, out_gz: Path) -> None:
+    cmd = ["gzip", "-c", str(src)]
+    with out_gz.open("wb") as f:
+        r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE)
     if r.returncode != 0:
-        raise RuntimeError(f"bundle tar failed: {r.stderr or r.stdout}")
+        err = (r.stderr or b"").decode("utf-8", errors="replace")
+        raise RuntimeError(f"gzip failed: {err}")
 
 
 def split_file(path: Path, chunk_bytes: int, out_dir: Path) -> list[Path]:
@@ -350,6 +338,27 @@ def send_document(
         raise RuntimeError(f"Telegram API error: {body}")
 
 
+def upload_file_with_optional_split(
+    token: str,
+    chat_id: str,
+    file_path: Path,
+    max_bytes: int,
+    caption_base: str,
+) -> None:
+    size = file_path.stat().st_size
+    if size <= max_bytes:
+        send_document(token, chat_id, file_path, caption_base)
+        return
+
+    parts_dir = file_path.parent / f"{file_path.name}.parts"
+    parts_dir.mkdir(exist_ok=True)
+    parts = split_file(file_path, max_bytes, parts_dir)
+    total = len(parts)
+    for i, part in enumerate(parts, start=1):
+        cap = f"{caption_base} | part {i}/{total}"
+        send_document(token, chat_id, part, cap)
+
+
 def run_one_project(
     proj: dict[str, Any],
     global_cfg: dict[str, Any],
@@ -393,36 +402,41 @@ def run_one_project(
 
     source_arc = work / "source.tar.gz"
     db_sql = work / "database.sql"
-    final_arc = work / f"laravel-backup-{name}-{ts}.tar.gz"
+    db_gz = work / "database.sql.gz"
 
     log.info("[%s] Archiving source…", name)
     tar_source(project_path, excludes, source_arc)
 
     log.info("[%s] Dumping database (%s)…", name, db["driver"])
     dump_database(db, db_sql)
+    gzip_file(db_sql, db_gz)
 
-    log.info("[%s] Creating bundle…", name)
-    make_final_archive(work, source_arc, db_sql, final_arc)
-
-    size = final_arc.stat().st_size
-    log.info("[%s] Bundle size %s bytes", name, size)
+    source_size = source_arc.stat().st_size
+    db_size = db_gz.stat().st_size
+    log.info("[%s] Source archive size %s bytes", name, source_size)
+    log.info("[%s] DB dump archive size %s bytes", name, db_size)
 
     base_caption = f"{name} | {ts} UTC"
 
-    if size <= max_bytes:
-        send_document(token, chat_id, final_arc, base_caption)
-        log.info("[%s] Uploaded single archive", name)
-        return
+    log.info("[%s] Uploading source archive…", name)
+    upload_file_with_optional_split(
+        token,
+        chat_id,
+        source_arc,
+        max_bytes,
+        f"{base_caption} | source.tar.gz",
+    )
 
-    log.info("[%s] Splitting for Telegram (chunk max %s bytes)…", name, max_bytes)
-    parts_dir = work / "parts"
-    parts_dir.mkdir()
-    parts = split_file(final_arc, max_bytes, parts_dir)
-    total = len(parts)
-    for i, part in enumerate(parts, start=1):
-        cap = f"{base_caption} | part {i}/{total}"
-        send_document(token, chat_id, part, cap)
-        log.info("[%s] Uploaded part %s/%s", name, i, total)
+    log.info("[%s] Uploading database dump…", name)
+    upload_file_with_optional_split(
+        token,
+        chat_id,
+        db_gz,
+        max_bytes,
+        f"{base_caption} | database.sql.gz",
+    )
+
+    log.info("[%s] Upload complete", name)
 
 
 def cmd_run(config_path: Path) -> int:
