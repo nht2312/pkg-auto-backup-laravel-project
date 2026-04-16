@@ -10,6 +10,7 @@ import argparse
 import json
 import logging
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -333,6 +334,31 @@ def send_document(
         raise RuntimeError(f"Telegram API error: {body}")
 
 
+def send_message(bot_token: str, chat_id: str, text: str) -> None:
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    cmd = [
+        "curl",
+        "-sS",
+        "-f",
+        "-X",
+        "POST",
+        url,
+        "-F",
+        f"chat_id={chat_id}",
+        "-F",
+        f"text={text}",
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"curl failed ({r.returncode}): {r.stderr or r.stdout}")
+    try:
+        body = json.loads(r.stdout)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Telegram API non-JSON: {r.stdout[:500]}") from e
+    if not body.get("ok"):
+        raise RuntimeError(f"Telegram API error: {body}")
+
+
 def upload_file_with_optional_split(
     token: str,
     chat_id: str,
@@ -350,8 +376,21 @@ def upload_file_with_optional_split(
     parts = split_file(file_path, max_bytes, parts_dir)
     total = len(parts)
     for i, part in enumerate(parts, start=1):
-        cap = f"{caption_base} | part {i}/{total}"
+        cap = (
+            "📦 Backup chunk\n"
+            f"{caption_base}\n"
+            f"Part {i}/{total}"
+        )
         send_document(token, chat_id, part, cap)
+
+    merge_cmd = f"cat {shlex.quote(file_path.name)}.part* > {shlex.quote(file_path.name)}"
+    done_msg = (
+        "✅ Uploaded all chunks\n"
+        f"{caption_base}\n\n"
+        "Merge command on server:\n"
+        f"{merge_cmd}"
+    )
+    send_message(token, chat_id, done_msg)
 
 
 def run_one_project(
