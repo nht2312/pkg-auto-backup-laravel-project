@@ -44,8 +44,24 @@ configure)
   mkdir -p /etc/laravel-telegram-backup
   chmod 755 /etc/laravel-telegram-backup
 
+  CFG=/etc/laravel-telegram-backup/config.json
+  DEF=/usr/share/doc/laravel-telegram-backup/examples/config.json
+  TS="$(date -u +%Y%m%d%H%M%S 2>/dev/null || date +%Y%m%d%H%M%S)"
+  BAK="${CFG}.bak.${TS}"
+
   if [ -f /etc/laravel-telegram-backup/config.json ]; then
-    lpb sync-schedule 2>/dev/null || true
+    cp -a "$CFG" "$BAK" 2>/dev/null || true
+
+    if lpb config-migrate --config "$CFG" --defaults "$DEF" && lpb validate-config --config "$CFG"; then
+      lpb sync-schedule --config "$CFG" 2>/dev/null || true
+    else
+      echo "WARNING: config migration failed; restoring previous config" >&2
+      if [ -f "$BAK" ]; then
+        cp -a "$BAK" "$CFG" 2>/dev/null || true
+      fi
+    fi
+  else
+    lpb config-migrate --config "$CFG" --defaults "$DEF" 2>/dev/null || true
   fi
 
   if command -v systemctl >/dev/null 2>&1; then

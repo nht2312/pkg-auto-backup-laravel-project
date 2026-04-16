@@ -46,6 +46,7 @@ sudo lpb run
 - `lpb run`
 - `lpb validate-config`
 - `lpb sync-schedule`
+- `lpb config-migrate`
 
 ## Check Status
 
@@ -53,6 +54,17 @@ sudo lpb run
 sudo systemctl status laravel-telegram-backup.timer
 journalctl -u laravel-telegram-backup.service -n 100 --no-pager
 ```
+
+## Upgrade Behavior (Keep User Config)
+
+- `apt upgrade` keeps `/etc/laravel-telegram-backup/config.json` (no reset).
+- During upgrade, package runs automatic `lpb config-migrate`:
+  - existing user values are preserved,
+  - new keys from package defaults are added when missing,
+  - arrays/lists keep user values by default.
+- A backup is created before migration:
+  - `/etc/laravel-telegram-backup/config.json.bak.YYYYmmddHHMMSS`
+- If migration/validation fails, installer restores from backup.
 
 ## Detailed Docs
 
@@ -116,6 +128,7 @@ sudo lpb run
 - `lpb run`
 - `lpb validate-config`
 - `lpb sync-schedule`
+- `lpb config-migrate`
 
 ## Kiểm tra trạng thái
 
@@ -123,6 +136,17 @@ sudo lpb run
 sudo systemctl status laravel-telegram-backup.timer
 journalctl -u laravel-telegram-backup.service -n 100 --no-pager
 ```
+
+## Hành vi khi nâng cấp (không mất config)
+
+- `apt upgrade` giữ nguyên `/etc/laravel-telegram-backup/config.json` (không reset).
+- Trong quá trình upgrade, package tự chạy `lpb config-migrate`:
+  - giữ nguyên giá trị user đã cấu hình,
+  - thêm key mới từ config mẫu khi còn thiếu,
+  - mảng/list mặc định giữ theo dữ liệu user.
+- Trước migrate sẽ tạo backup:
+  - `/etc/laravel-telegram-backup/config.json.bak.YYYYmmddHHMMSS`
+- Nếu migrate/validate lỗi, installer tự restore từ backup.
 
 ## Tài liệu chi tiết
 

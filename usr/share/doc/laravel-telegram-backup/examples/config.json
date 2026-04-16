@@ -1,11 +1,13 @@
 {
+  "config_schema_version": 1,
   "schedule": {
     "mode": "calendar",
     "on_calendar": "*-*-* 02:00:00",
     "persistent": true
   },
   "global": {
-    "telegram_max_bytes": 47185920
+    "_comment_telegram_max_bytes": "Max chunk size in bytes (500MB = 524288000).",
+    "telegram_max_bytes": 524288000
   },
   "projects": [
     {

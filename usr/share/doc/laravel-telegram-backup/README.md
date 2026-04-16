@@ -86,9 +86,9 @@ Lệnh này ghi file drop-in cho timer và `daemon-reload` + restart timer.
 - MySQL/Postgres: cần cài client tương ứng (`mariadb-client`, `postgresql-client`).
 - SQLite: cần `sqlite3`; trong config `database` là đường dẫn file `.sqlite`.
 
-### File lớn hơn ~50 MB
+### File lớn hơn 500 MB
 
-Telegram Bot API giới hạn kích thước file. Gói tự **chia nhỏ** archive và gửi nhiều tin (caption ghi `part i/n`). Có thể chỉnh ngưỡng trong `global.telegram_max_bytes` (mặc định ~45 MiB).
+Gói tự **chia nhỏ** archive và gửi nhiều tin (caption ghi `part i/n`). Có thể chỉnh ngưỡng trong `global.telegram_max_bytes` (mặc định `524288000` = 500MB).
 
 ## Lệnh
 
@@ -97,6 +97,7 @@ Telegram Bot API giới hạn kích thước file. Gói tự **chia nhỏ** arch
 | `lpb run` | Chạy backup toàn bộ project (mặc định). |
 | `lpb validate-config` | Kiểm tra JSON. |
 | `lpb sync-schedule` | Đồng bộ lịch từ JSON sang systemd timer. |
+| `lpb config-migrate` | Deep-merge config user với defaults khi nâng cấp schema. |
 
 ## Systemd
 
@@ -109,6 +110,15 @@ journalctl -u laravel-telegram-backup.service -n 50 --no-pager
 ```
 
 Nếu chưa có `config.json`, timer vẫn chạy nhưng service **bỏ qua** lần chạy (ExecCondition).
+
+## Nâng cấp version không mất config
+
+- Khi `apt upgrade`, package tự migrate config theo hướng an toàn:
+  - giữ nguyên các giá trị user đã chỉnh,
+  - thêm key mới từ defaults nếu user chưa có.
+- Trước migrate, package tạo backup:
+  - `/etc/laravel-telegram-backup/config.json.bak.YYYYmmddHHMMSS`
+- Nếu migrate hoặc validate thất bại, package restore lại từ file backup.
 
 ## Build gói .deb (từ mã nguồn)
 

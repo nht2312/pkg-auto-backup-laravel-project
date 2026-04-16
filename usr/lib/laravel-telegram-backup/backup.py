@@ -18,9 +18,12 @@ from pathlib import Path
 from typing import Any
 
 CONFIG_PATH = Path("/etc/laravel-telegram-backup/config.json")
+DEFAULTS_CONFIG_PATH = Path(
+    "/usr/share/doc/laravel-telegram-backup/examples/config.json"
+)
 TIMER_DROPIN_DIR = Path("/etc/systemd/system/laravel-telegram-backup.timer.d")
 TIMER_DROPIN_FILE = TIMER_DROPIN_DIR / "schedule.conf"
-DEFAULT_MAX_BYTES = 45 * 1024 * 1024  # under Telegram ~50MB bot limit
+DEFAULT_MAX_BYTES = 500 * 1024 * 1024  # 500MB default max archive part size
 
 log = logging.getLogger("laravel-telegram-backup")
 
@@ -71,14 +74,13 @@ def schedule_to_timer_ini(schedule: dict[str, Any]) -> str:
     if mode == "interval":
         every = schedule.get("every", "24h")
         boot = schedule.get("on_boot_sec", "2min")
+        # Reset calendar trigger from base unit.
         lines.append("OnCalendar=")
         lines.append(f"OnUnitActiveSec={every}")
         lines.append(f"OnBootSec={boot}")
     else:
         cal = schedule.get("on_calendar", "daily")
         lines.append(f"OnCalendar={cal}")
-        lines.append("OnUnitActiveSec=")
-        lines.append("OnBootSec=")
     persist = schedule.get("persistent", True)
     lines.append(f"Persistent={'true' if persist else 'false'}")
     return "\n".join(lines) + "\n"
@@ -114,6 +116,61 @@ def cmd_validate(config_path: Path) -> int:
     data = load_config(config_path)
     validate_config(data)
     log.info("Config OK: %s project(s)", len(data["projects"]))
+    return 0
+
+
+def json_clone(value: Any) -> Any:
+    return json.loads(json.dumps(value))
+
+
+def merge_defaults_preserve_user(user_val: Any, default_val: Any) -> Any:
+    """Deep-merge where existing user values always win."""
+    if isinstance(user_val, dict) and isinstance(default_val, dict):
+        merged = dict(user_val)
+        for k, default_item in default_val.items():
+            if k in user_val:
+                merged[k] = merge_defaults_preserve_user(user_val[k], default_item)
+            else:
+                merged[k] = json_clone(default_item)
+        return merged
+    if isinstance(user_val, list) and isinstance(default_val, list):
+        # Keep user arrays as-is to avoid accidental destructive changes.
+        return list(user_val)
+    return user_val
+
+
+def cmd_config_migrate(config_path: Path, defaults_path: Path) -> int:
+    defaults = load_config(defaults_path)
+    validate_config(defaults)
+
+    if not config_path.exists():
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(
+            json.dumps(defaults, indent=2, ensure_ascii=True) + "\n",
+            encoding="utf-8",
+        )
+        os.chmod(config_path, 0o600)
+        log.info("Config not found, created from defaults: %s", config_path)
+        return 0
+
+    user_cfg = load_config(config_path)
+    merged = merge_defaults_preserve_user(user_cfg, defaults)
+
+    if "config_schema_version" in defaults:
+        merged["config_schema_version"] = defaults["config_schema_version"]
+
+    validate_config(merged)
+
+    ts = time.strftime("%Y%m%d%H%M%S", time.gmtime())
+    backup_path = config_path.with_name(f"{config_path.name}.bak.{ts}")
+    shutil.copy2(config_path, backup_path)
+
+    config_path.write_text(
+        json.dumps(merged, indent=2, ensure_ascii=True) + "\n",
+        encoding="utf-8",
+    )
+    os.chmod(config_path, 0o600)
+    log.info("Migrated config in-place and created backup: %s", backup_path)
     return 0
 
 
@@ -387,13 +444,19 @@ def main(argv: list[str]) -> int:
         "command",
         nargs="?",
         default="run",
-        choices=["run", "sync-schedule", "validate-config"],
+        choices=["run", "sync-schedule", "validate-config", "config-migrate"],
     )
     parser.add_argument(
         "--config",
         type=Path,
         default=CONFIG_PATH,
         help=f"Config file (default: {CONFIG_PATH})",
+    )
+    parser.add_argument(
+        "--defaults",
+        type=Path,
+        default=DEFAULTS_CONFIG_PATH,
+        help=f"Defaults config for migration (default: {DEFAULTS_CONFIG_PATH})",
     )
     args = parser.parse_args(argv)
 
@@ -417,6 +480,13 @@ def main(argv: list[str]) -> int:
     if args.command == "validate-config":
         try:
             return cmd_validate(args.config)
+        except Exception as e:
+            log.error("%s", e)
+            return 1
+
+    if args.command == "config-migrate":
+        try:
+            return cmd_config_migrate(args.config, args.defaults)
         except Exception as e:
             log.error("%s", e)
             return 1
