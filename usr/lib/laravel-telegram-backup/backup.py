@@ -77,9 +77,12 @@ def schedule_to_timer_ini(schedule: dict[str, Any]) -> str:
     if mode == "interval":
         every = schedule.get("every", "24h")
         boot = schedule.get("on_boot_sec", "2min")
-        # Reset calendar trigger from base unit.
+        # Disable calendar trigger from base unit; use timer-based activation instead.
         lines.append("OnCalendar=")
-        lines.append(f"OnUnitActiveSec={every}")
+        # OnUnitActiveSec depends on the service's last activation time (systemd state),
+        # which can lead to "Trigger: n/a" until the unit has been started by systemd.
+        # OnActiveSec is driven purely by the timer cadence, which is what we want.
+        lines.append(f"OnActiveSec={every}")
         lines.append(f"OnBootSec={boot}")
     else:
         cal = schedule.get("on_calendar", "daily")
