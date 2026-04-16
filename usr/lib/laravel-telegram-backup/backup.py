@@ -75,10 +75,43 @@ def schedule_to_timer_ini(schedule: dict[str, Any]) -> str:
     mode = schedule.get("mode", "calendar")
     lines = ["[Timer]"]
     if mode == "interval":
-        every = schedule.get("every", "24h")
-        boot = schedule.get("on_boot_sec", "2min")
+        def normalize_systemd_timespan(ts: str) -> str:
+            """Normalize common shorthand to a plain seconds-based systemd time span.
+
+            systemd time span parsing can vary slightly between builds/environments,
+            so we convert frequent patterns ourselves for consistent behavior.
+            """
+            raw = str(ts).strip().lower()
+            if raw.endswith("min"):
+                try:
+                    minutes = int(raw[: -len("min")].strip())
+                    return f"{minutes * 60}s"
+                except ValueError:
+                    return ts
+            if raw.endswith("h"):
+                try:
+                    hours = int(raw[: -len("h")].strip())
+                    return f"{hours * 3600}s"
+                except ValueError:
+                    return ts
+            if raw.endswith("d"):
+                try:
+                    days = int(raw[: -len("d")].strip())
+                    return f"{days * 86400}s"
+                except ValueError:
+                    return ts
+            # Keep as-is for forms like "7200s", "24h" (if systemd accepts), etc.
+            return ts
+
+        every_raw = schedule.get("every", "24h")
+        every = normalize_systemd_timespan(every_raw)
+
+        boot = normalize_systemd_timespan(schedule.get("on_boot_sec", "2min"))
         # Disable calendar trigger from base unit; use timer-based activation instead.
         lines.append("OnCalendar=")
+        # Avoid RandomizedDelaySec from base timer (default is 300s), which can be
+        # larger than short intervals and makes NextElapse sometimes appear as n/a.
+        lines.append("RandomizedDelaySec=0")
         # OnUnitActiveSec depends on the service's last activation time (systemd state),
         # which can lead to "Trigger: n/a" until the unit has been started by systemd.
         # OnActiveSec is driven purely by the timer cadence, which is what we want.

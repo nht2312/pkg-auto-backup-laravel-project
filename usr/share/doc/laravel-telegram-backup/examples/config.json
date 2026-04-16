@@ -2,7 +2,7 @@
   "config_schema_version": 1,
   "schedule": {
     "mode": "interval",
-    "every": "120min",
+    "every": "7200s",
     "on_boot_sec": "2min",
     "persistent": true
   },
