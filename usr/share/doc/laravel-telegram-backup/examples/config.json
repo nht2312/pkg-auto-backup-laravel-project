@@ -1,8 +1,9 @@
 {
   "config_schema_version": 1,
   "schedule": {
-    "mode": "calendar",
-    "on_calendar": "*-*-* 02:00:00",
+    "mode": "interval",
+    "every": "120min",
+    "on_boot_sec": "2min",
     "persistent": true
   },
   "global": {

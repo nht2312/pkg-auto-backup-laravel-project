@@ -62,6 +62,7 @@ configure)
     fi
   else
     lpb config-migrate --config "$CFG" --defaults "$DEF" 2>/dev/null || true
+    lpb sync-schedule --config "$CFG" 2>/dev/null || true
   fi
 
   if command -v systemctl >/dev/null 2>&1; then
