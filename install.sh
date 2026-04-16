@@ -8,6 +8,43 @@ else
   SUDO="sudo"
 fi
 
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_RESET="$(printf '\033[0m')"
+  C_TITLE="$(printf '\033[1;36m')"
+  C_STEP="$(printf '\033[1;33m')"
+  C_CMD="$(printf '\033[0;32m')"
+  C_LINE="$(printf '\033[0;34m')"
+else
+  C_RESET=""
+  C_TITLE=""
+  C_STEP=""
+  C_CMD=""
+  C_LINE=""
+fi
+
+print_post_install_setup() {
+  echo ""
+  printf "%s----------------------------------------%s\n" "$C_LINE" "$C_RESET"
+  printf "%sPOST-INSTALL SETUP%s\n" "$C_TITLE" "$C_RESET"
+  printf "%s----------------------------------------%s\n" "$C_LINE" "$C_RESET"
+  printf "%sStep 1:%s Edit configuration file\n" "$C_STEP" "$C_RESET"
+  printf "  %ssudo nano /etc/laravel-telegram-backup/config.json%s\n" "$C_CMD" "$C_RESET"
+  echo ""
+  printf "%sStep 2:%s Validate configuration\n" "$C_STEP" "$C_RESET"
+  printf "  %ssudo lpb validate-config%s\n" "$C_CMD" "$C_RESET"
+  echo ""
+  printf "%sStep 3:%s Apply schedule changes\n" "$C_STEP" "$C_RESET"
+  printf "  %ssudo lpb sync-schedule%s\n" "$C_CMD" "$C_RESET"
+  echo ""
+  printf "%sStep 4:%s Run a test backup\n" "$C_STEP" "$C_RESET"
+  printf "  %ssudo lpb run%s\n" "$C_CMD" "$C_RESET"
+  echo ""
+  printf "%sStep 5:%s Check timer and logs\n" "$C_STEP" "$C_RESET"
+  printf "  %ssudo systemctl status laravel-telegram-backup.timer%s\n" "$C_CMD" "$C_RESET"
+  printf "  %sjournalctl -u laravel-telegram-backup.service -n 50 --no-pager%s\n" "$C_CMD" "$C_RESET"
+  printf "%s----------------------------------------%s\n" "$C_LINE" "$C_RESET"
+}
+
 ROOT="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 PKG_NAME="laravel-telegram-backup"
 VERSION="${VERSION:-1.0.0}"
@@ -40,16 +77,4 @@ else
 fi
 
 echo "[5/5] Done."
-echo ""
-echo "Next steps:"
-echo "  1) Edit config:"
-echo "     sudo nano /etc/laravel-telegram-backup/config.json"
-echo "  2) Validate config:"
-echo "     sudo lpb validate-config"
-echo "  3) Sync schedule (after editing schedule):"
-echo "     sudo lpb sync-schedule"
-echo "  4) Run a manual test backup:"
-echo "     sudo lpb run"
-echo "  5) Check timer/logs:"
-echo "     sudo systemctl status laravel-telegram-backup.timer"
-echo "     journalctl -u laravel-telegram-backup.service -n 50 --no-pager"
+print_post_install_setup
