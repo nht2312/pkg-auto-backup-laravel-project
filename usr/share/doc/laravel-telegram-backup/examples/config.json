@@ -6,8 +6,8 @@
     "persistent": true
   },
   "global": {
-    "_comment_telegram_max_bytes": "Max chunk size in bytes (500MB = 524288000).",
-    "telegram_max_bytes": 524288000
+    "_comment_telegram_max_bytes": "Max chunk size in bytes. Safe default for Telegram bot is 47185920 (45MiB).",
+    "telegram_max_bytes": 47185920
   },
   "projects": [
     {

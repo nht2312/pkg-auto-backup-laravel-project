@@ -23,7 +23,8 @@ DEFAULTS_CONFIG_PATH = Path(
 )
 TIMER_DROPIN_DIR = Path("/etc/systemd/system/laravel-telegram-backup.timer.d")
 TIMER_DROPIN_FILE = TIMER_DROPIN_DIR / "schedule.conf"
-DEFAULT_MAX_BYTES = 500 * 1024 * 1024  # 500MB default max archive part size
+TELEGRAM_SAFE_MAX_BYTES = 45 * 1024 * 1024  # keep under common bot limits
+DEFAULT_MAX_BYTES = TELEGRAM_SAFE_MAX_BYTES
 
 log = logging.getLogger("laravel-telegram-backup")
 
@@ -374,7 +375,17 @@ def run_one_project(
     ex = proj.get("tar_excludes")
     excludes = list(default_excludes) if ex is None else list(ex)
 
-    max_bytes = int(global_cfg.get("telegram_max_bytes", DEFAULT_MAX_BYTES))
+    configured_max = int(global_cfg.get("telegram_max_bytes", DEFAULT_MAX_BYTES))
+    if configured_max <= 0:
+        raise ValueError("global.telegram_max_bytes must be > 0")
+    max_bytes = min(configured_max, TELEGRAM_SAFE_MAX_BYTES)
+    if configured_max != max_bytes:
+        log.warning(
+            "[%s] telegram_max_bytes=%s is above safe Telegram limit; using %s",
+            name,
+            configured_max,
+            max_bytes,
+        )
 
     ts = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
     work = work_root / f"{name}-{ts}"

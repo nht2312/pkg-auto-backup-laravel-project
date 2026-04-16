@@ -86,9 +86,9 @@ Lệnh này ghi file drop-in cho timer và `daemon-reload` + restart timer.
 - MySQL/Postgres: cần cài client tương ứng (`mariadb-client`, `postgresql-client`).
 - SQLite: cần `sqlite3`; trong config `database` là đường dẫn file `.sqlite`.
 
-### File lớn hơn 500 MB
+### File lớn hơn ~50 MB
 
-Gói tự **chia nhỏ** archive và gửi nhiều tin (caption ghi `part i/n`). Có thể chỉnh ngưỡng trong `global.telegram_max_bytes` (mặc định `524288000` = 500MB).
+Gói tự **chia nhỏ** archive và gửi nhiều tin (caption ghi `part i/n`). Có thể chỉnh ngưỡng trong `global.telegram_max_bytes` (mặc định `47185920` = 45MiB). Nếu set cao hơn, hệ thống sẽ tự giới hạn về ngưỡng an toàn để tránh lỗi Telegram `413`.
 
 ## Lệnh
 
