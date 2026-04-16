@@ -3,6 +3,7 @@
 Laravel backup: archive source + DB dump, upload to Telegram.
 Config: /etc/laravel-telegram-backup/config.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -175,10 +176,10 @@ def cmd_config_migrate(config_path: Path, defaults_path: Path) -> int:
     return 0
 
 
-def tar_source(
+def zip_source(
     project_path: Path,
     excludes: list[str],
-    out_tar_gz: Path,
+    out_zip: Path,
 ) -> None:
     if not project_path.is_dir():
         raise FileNotFoundError(f"project_path is not a directory: {project_path}")
@@ -188,21 +189,19 @@ def tar_source(
 
     exclude_args: list[str] = []
     for pat in excludes:
-        exclude_args.extend(["--exclude", pat])
+        exclude_args.extend(["-x", pat])
 
-    # GNU tar: create gzip archive; -C chdir
     cmd = [
-        "tar",
-        "-C",
-        str(project_path),
-        "-czf",
-        str(out_tar_gz),
+        "zip",
+        "-r",
+        "-q",
+        str(out_zip),
         *exclude_args,
         ".",
     ]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, cwd=project_path, capture_output=True, text=True)
     if r.returncode != 0:
-        raise RuntimeError(f"tar source failed: {r.stderr or r.stdout}")
+        raise RuntimeError(f"zip source failed: {r.stderr or r.stdout}")
 
 
 def dump_mysql(db: dict[str, Any], out_sql: Path) -> None:
@@ -286,13 +285,11 @@ def dump_database(db: dict[str, Any], out_sql: Path) -> None:
         raise ValueError(f"Unsupported database driver: {driver}")
 
 
-def gzip_file(src: Path, out_gz: Path) -> None:
-    cmd = ["gzip", "-c", str(src)]
-    with out_gz.open("wb") as f:
-        r = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE)
+def zip_file(src: Path, out_zip: Path) -> None:
+    cmd = ["zip", "-q", "-j", str(out_zip), str(src)]
+    r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
-        err = (r.stderr or b"").decode("utf-8", errors="replace")
-        raise RuntimeError(f"gzip failed: {err}")
+        raise RuntimeError(f"zip failed: {r.stderr or r.stdout}")
 
 
 def split_file(path: Path, chunk_bytes: int, out_dir: Path) -> list[Path]:
@@ -327,9 +324,7 @@ def send_document(
     ]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
-        raise RuntimeError(
-            f"curl failed ({r.returncode}): {r.stderr or r.stdout}"
-        )
+        raise RuntimeError(f"curl failed ({r.returncode}): {r.stderr or r.stdout}")
     try:
         body = json.loads(r.stdout)
     except json.JSONDecodeError as e:
@@ -381,7 +376,7 @@ def run_one_project(
         "storage/framework/views",
         "bootstrap/cache",
     ]
-    ex = proj.get("tar_excludes")
+    ex = proj.get("zip_excludes")
     excludes = list(default_excludes) if ex is None else list(ex)
 
     configured_max = int(global_cfg.get("telegram_max_bytes", DEFAULT_MAX_BYTES))
@@ -400,19 +395,19 @@ def run_one_project(
     work = work_root / f"{name}-{ts}"
     work.mkdir(parents=True)
 
-    source_arc = work / "source.tar.gz"
+    source_arc = work / "source.zip"
     db_sql = work / "database.sql"
-    db_gz = work / "database.sql.gz"
+    db_zip = work / "database.sql.zip"
 
     log.info("[%s] Archiving source…", name)
-    tar_source(project_path, excludes, source_arc)
+    zip_source(project_path, excludes, source_arc)
 
     log.info("[%s] Dumping database (%s)…", name, db["driver"])
     dump_database(db, db_sql)
-    gzip_file(db_sql, db_gz)
+    zip_file(db_sql, db_zip)
 
     source_size = source_arc.stat().st_size
-    db_size = db_gz.stat().st_size
+    db_size = db_zip.stat().st_size
     log.info("[%s] Source archive size %s bytes", name, source_size)
     log.info("[%s] DB dump archive size %s bytes", name, db_size)
 
@@ -424,16 +419,16 @@ def run_one_project(
         chat_id,
         source_arc,
         max_bytes,
-        f"{base_caption} | source.tar.gz",
+        f"{base_caption} | source.zip",
     )
 
     log.info("[%s] Uploading database dump…", name)
     upload_file_with_optional_split(
         token,
         chat_id,
-        db_gz,
+        db_zip,
         max_bytes,
-        f"{base_caption} | database.sql.gz",
+        f"{base_caption} | database.sql.zip",
     )
 
     log.info("[%s] Upload complete", name)

@@ -28,10 +28,10 @@ Section: utils
 Priority: optional
 Architecture: all
 Maintainer: Unmaintained Package <root@localhost>
-Depends: python3 (>= 3.7), curl, tar, gzip, coreutils
+Depends: python3 (>= 3.7), curl, zip, coreutils
 Recommends: default-mysql-client | mariadb-client, postgresql-client, sqlite3
 Description: Backup Laravel apps and upload archives to Telegram
- Automates tar of project trees, database dumps (MySQL, PostgreSQL, SQLite),
+ Automates zip of project trees, database dumps (MySQL, PostgreSQL, SQLite),
  and sends compressed bundles to a Telegram channel via Bot API. Uses
  systemd timer for scheduled runs.
 EOF

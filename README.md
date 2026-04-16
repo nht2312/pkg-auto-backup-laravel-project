@@ -8,7 +8,7 @@ Automatically backs up multiple Laravel projects (source code + database) and up
 ## Features
 
 - Backup multiple projects from one JSON config
-- Archive source (`tar.gz`) with exclude patterns
+- Archive source (`zip`) with exclude patterns
 - Database dump support: MySQL/MariaDB, PostgreSQL, SQLite
 - Upload source and DB as separate archives (easier to inspect)
 - Auto split each archive when exceeding Telegram bot upload limit
@@ -92,7 +92,7 @@ Tự động backup nhiều dự án Laravel (source code + database) và upload
 ## Tính năng
 
 - Backup nhiều project trong một file config JSON
-- Backup source (`tar.gz`) với danh sách exclude
+- Backup source (`zip`) với danh sách exclude
 - Dump DB: MySQL/MariaDB, PostgreSQL, SQLite
 - Tự chia nhỏ file khi vượt giới hạn upload Telegram bot
 - Chạy theo lịch (`OnCalendar`) hoặc theo chu kỳ (`OnUnitActiveSec`)

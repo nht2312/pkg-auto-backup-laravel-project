@@ -132,7 +132,7 @@ if [ -n "$DEB_URL" ]; then
 fi
 
 echo "[3/6] Fallback mode: installing build dependencies..."
-$SUDO apt-get install -y git dpkg-dev tar gzip coreutils
+$SUDO apt-get install -y git dpkg-dev zip coreutils
 
 SRC_DIR="$TMP_DIR/src"
 REPO_URL="https://github.com/$REPO.git"

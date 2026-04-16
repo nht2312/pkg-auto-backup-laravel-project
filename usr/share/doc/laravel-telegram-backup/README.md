@@ -1,6 +1,6 @@
 # laravel-telegram-backup
 
-Định kỳ backup mã nguồn Laravel (tar.gz) và dump database, gửi file lên Telegram (Bot API). Hỗ trợ nhiều dự án trong một file cấu hình JSON.
+Định kỳ backup mã nguồn Laravel (zip) và dump database, gửi file lên Telegram (Bot API). Hỗ trợ nhiều dự án trong một file cấu hình JSON.
 
 ## Cài đặt
 
@@ -89,8 +89,8 @@ Lệnh này ghi file drop-in cho timer và `daemon-reload` + restart timer.
 ### File lớn hơn ~50 MB
 
 Gói gửi **2 file độc lập** để dễ kiểm tra:
-- `source.tar.gz` (source code)
-- `database.sql.gz` (database dump)
+- `source.zip` (source code)
+- `database.sql.zip` (database dump)
 
 Nếu một file vượt ngưỡng, hệ thống tự **chia nhỏ file đó** và gửi nhiều tin (caption ghi `part i/n`). Có thể chỉnh ngưỡng trong `global.telegram_max_bytes` (mặc định `47185920` = 45MiB). Nếu set cao hơn, hệ thống sẽ tự giới hạn về ngưỡng an toàn để tránh lỗi Telegram `413`.
 

@@ -52,7 +52,7 @@ DEB_FILE="$ROOT/${PKG_NAME}_${VERSION}_all.deb"
 
 echo "[1/5] Installing build/runtime dependencies..."
 $SUDO apt-get update
-$SUDO apt-get install -y dpkg-dev python3 curl tar gzip coreutils
+$SUDO apt-get install -y dpkg-dev python3 curl zip coreutils
 
 echo "[2/5] Building .deb package..."
 chmod +x "$ROOT/build-deb.sh"

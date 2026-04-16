@@ -25,7 +25,7 @@
         "username": "laravel",
         "password": "secret"
       },
-      "tar_excludes": [
+      "zip_excludes": [
         "vendor",
         "node_modules",
         ".git",
