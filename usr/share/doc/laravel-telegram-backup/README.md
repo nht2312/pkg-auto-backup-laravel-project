@@ -74,7 +74,7 @@ Trong JSON, mục `schedule`:
 Sau khi sửa lịch trong JSON:
 
 ```bash
-sudo laravel-telegram-backup sync-schedule
+sudo lpb sync-schedule
 ```
 
 Lệnh này ghi file drop-in cho timer và `daemon-reload` + restart timer.
@@ -93,9 +93,9 @@ Telegram Bot API giới hạn kích thước file. Gói tự **chia nhỏ** arch
 
 | Lệnh | Mô tả |
 |------|--------|
-| `laravel-telegram-backup run` | Chạy backup toàn bộ project (mặc định). |
-| `laravel-telegram-backup validate-config` | Kiểm tra JSON. |
-| `laravel-telegram-backup sync-schedule` | Đồng bộ lịch từ JSON sang systemd timer. |
+| `lpb run` | Chạy backup toàn bộ project (mặc định). |
+| `lpb validate-config` | Kiểm tra JSON. |
+| `lpb sync-schedule` | Đồng bộ lịch từ JSON sang systemd timer. |
 
 ## Systemd
 

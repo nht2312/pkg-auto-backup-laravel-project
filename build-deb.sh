@@ -13,6 +13,7 @@ mkdir -p "$STAGE/usr/bin"
 mkdir -p "$STAGE/usr/lib/laravel-telegram-backup"
 mkdir -p "$STAGE/usr/share/doc/$PKG/examples"
 
+install -m 755 "$ROOT/usr/bin/lpb" "$STAGE/usr/bin/"
 install -m 755 "$ROOT/usr/bin/laravel-telegram-backup" "$STAGE/usr/bin/"
 install -m 644 "$ROOT/usr/lib/laravel-telegram-backup/backup.py" "$STAGE/usr/lib/laravel-telegram-backup/"
 install -m 644 "$ROOT/lib/systemd/system/laravel-telegram-backup.service" "$STAGE/lib/systemd/system/"
@@ -44,7 +45,7 @@ configure)
   chmod 755 /etc/laravel-telegram-backup
 
   if [ -f /etc/laravel-telegram-backup/config.json ]; then
-    laravel-telegram-backup sync-schedule 2>/dev/null || true
+    lpb sync-schedule 2>/dev/null || true
   fi
 
   if command -v systemctl >/dev/null 2>&1; then

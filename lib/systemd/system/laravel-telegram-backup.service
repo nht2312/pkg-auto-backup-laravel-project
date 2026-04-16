@@ -6,7 +6,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/laravel-telegram-backup run
+ExecStart=/usr/bin/lpb run
 StandardOutput=journal
 StandardError=journal
 # Do not fail the unit if config is missing; skip run cleanly
