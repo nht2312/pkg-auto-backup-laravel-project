@@ -18,7 +18,8 @@ Ví dụ:
 curl -fsSL https://raw.githubusercontent.com/acme/laravel-telegram-backup/main/install-remote.sh | bash -s -- --repo acme/laravel-telegram-backup
 ```
 
-Script này sẽ tự tải file `.deb` từ **GitHub Releases** (latest) rồi cài luôn.
+Script sẽ thử tải file `.deb` từ **GitHub Releases** (latest) để cài nhanh.
+Nếu repo chưa có release hoặc không có asset `.deb`, script sẽ tự **fallback** sang clone source + build + cài tự động.
 
 Nếu muốn pin version:
 
@@ -119,3 +120,16 @@ chmod +x build-deb.sh
 ```
 
 File `laravel-telegram-backup_1.0.0_all.deb` sinh ra trong thư mục gốc (đổi phiên bản bằng biến môi trường `VERSION=... ./build-deb.sh`).
+
+## CI/CD tự build + release theo version
+
+Repo có thể cấu hình GitHub Actions để tự build và release `.deb` mỗi khi push tag dạng `vX.Y.Z`.
+
+Ví dụ:
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+Workflow tham chiếu: `.github/workflows/release.yml` (ở source repo).

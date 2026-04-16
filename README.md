@@ -20,7 +20,8 @@ curl -fsSL https://raw.githubusercontent.com/nht2312/pkg-auto-backup-laravel-pro
 ```
 
 This script will automatically:
-- download the latest `.deb` from GitHub Releases,
+- try to download the latest `.deb` from GitHub Releases,
+- fallback to clone + build + install from source if no release is available,
 - install the package,
 - create a sample config (if not present),
 - print post-install setup instructions.
@@ -56,6 +57,17 @@ journalctl -u laravel-telegram-backup.service -n 100 --no-pager
 ## Detailed Docs
 
 See: `usr/share/doc/laravel-telegram-backup/README.md`
+
+## CI/CD Release (GitHub Actions)
+
+Push a tag in format `vX.Y.Z` to auto build and publish `.deb` to GitHub Releases:
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+Workflow file: `.github/workflows/release.yml`
 
 </details>
 
@@ -115,5 +127,16 @@ journalctl -u laravel-telegram-backup.service -n 100 --no-pager
 ## Tài liệu chi tiết
 
 Xem thêm tại: `usr/share/doc/laravel-telegram-backup/README.md`
+
+## CI/CD Release (GitHub Actions)
+
+Push tag theo format `vX.Y.Z` để tự build `.deb` và publish lên GitHub Releases:
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+Workflow nằm tại: `.github/workflows/release.yml`
 
 </details>
