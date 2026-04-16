@@ -391,11 +391,7 @@ def upload_file_with_optional_split(
     parts = split_file(file_path, max_bytes, parts_dir)
     total = len(parts)
     for i, part in enumerate(parts, start=1):
-        cap = (
-            "📦 Backup chunk\n"
-            f"{caption_base}\n"
-            f"Part {i}/{total}"
-        )
+        cap = f"{caption_base}\nPart {i}/{total}"
         send_document(token, chat_id, part, cap)
 
     merge_cmd = f"cat {shlex.quote(file_path.name)}.part* > {shlex.quote(file_path.name)}"
@@ -466,6 +462,10 @@ def run_one_project(
     log.info("[%s] DB dump archive size %s bytes", name, db_size)
 
     base_caption = f"{name} | {ts} UTC"
+    header = f"==== BK {name} ===="
+    footer = f"==== BK {name} ===="
+
+    send_message(token, chat_id, header)
 
     log.info("[%s] Uploading source archive…", name)
     upload_file_with_optional_split(
@@ -486,6 +486,7 @@ def run_one_project(
     )
 
     log.info("[%s] Upload complete", name)
+    send_message(token, chat_id, footer)
 
 
 def cmd_run(config_path: Path) -> int:
