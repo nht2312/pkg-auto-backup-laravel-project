@@ -90,6 +90,51 @@ def setup_logging() -> None:
     )
 
 
+def print_cli_help() -> None:
+    use_color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+    c_reset = "\033[0m" if use_color else ""
+    c_title = "\033[1;36m" if use_color else ""
+    c_step = "\033[1;33m" if use_color else ""
+    c_cmd = "\033[0;32m" if use_color else ""
+    c_line = "\033[0;34m" if use_color else ""
+
+    line = "-" * 40
+    print(f"{c_line}{line}{c_reset}")
+    print(f"{c_title}LARAVEL TELEGRAM BACKUP CLI{c_reset}")
+    print(f"{c_line}{line}{c_reset}")
+    print(f"{c_title}Usage{c_reset}")
+    print(f"  {c_cmd}lpb run{c_reset}")
+    print(f"  {c_cmd}lpb validate-config{c_reset}")
+    print(f"  {c_cmd}lpb sync-schedule{c_reset}")
+    print("")
+    print(f"{c_title}Post-install steps (recommended){c_reset}")
+    print(
+        f"{c_step}1) Edit config:{c_reset} "
+        f"{c_cmd}sudo nano /etc/laravel-telegram-backup/config.json{c_reset}"
+    )
+    print(
+        f"{c_step}2) Validate:{c_reset}    "
+        f"{c_cmd}sudo lpb validate-config{c_reset}"
+    )
+    print(
+        f"{c_step}3) Sync timer:{c_reset}  "
+        f"{c_cmd}sudo lpb sync-schedule{c_reset}"
+    )
+    print(
+        f"{c_step}4) Test run:{c_reset}    "
+        f"{c_cmd}sudo lpb run{c_reset}"
+    )
+    print(
+        f"{c_step}5) Check logs:{c_reset}  "
+        f"{c_cmd}sudo systemctl status laravel-telegram-backup.timer{c_reset}"
+    )
+    print(
+        "                 "
+        f"{c_cmd}journalctl -u laravel-telegram-backup.service -n 100 --no-pager{c_reset}"
+    )
+    print(f"{c_line}{line}{c_reset}")
+
+
 def load_config(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"Missing config: {path}")
@@ -631,18 +676,7 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "help":
-        log.info("Usage:")
-        log.info("  lpb run")
-        log.info("  lpb validate-config")
-        log.info("  lpb sync-schedule")
-        log.info("")
-        log.info("Post-install steps (recommended):")
-        log.info("1) Edit config: sudo nano /etc/laravel-telegram-backup/config.json")
-        log.info("2) Validate:     sudo lpb validate-config")
-        log.info("3) Sync timer:   sudo lpb sync-schedule")
-        log.info("4) Test run:     sudo lpb run")
-        log.info("5) Check logs:   sudo systemctl status laravel-telegram-backup.timer")
-        log.info("                 journalctl -u laravel-telegram-backup.service -n 100 --no-pager")
+        print_cli_help()
         return 0
 
     if args.command == "run":
