@@ -208,10 +208,9 @@ def schedule_to_timer_ini(schedule: dict[str, Any]) -> str:
         # Avoid RandomizedDelaySec from base timer (default is 300s), which can be
         # larger than short intervals and makes NextElapse sometimes appear as n/a.
         lines.append("RandomizedDelaySec=0")
-        # OnUnitActiveSec depends on the service's last activation time (systemd state),
-        # which can lead to "Trigger: n/a" until the unit has been started by systemd.
-        # OnActiveSec is driven purely by the timer cadence, which is what we want.
-        lines.append(f"OnActiveSec={every}")
+        # Recur based on the activated service unit; this gives stable repeat behavior
+        # across runs (instead of one-shot behavior observed with OnActiveSec here).
+        lines.append(f"OnUnitActiveSec={every}")
         lines.append(f"OnBootSec={boot}")
     else:
         cal = schedule.get("on_calendar", "daily")
