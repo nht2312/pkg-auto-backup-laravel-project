@@ -17,7 +17,7 @@ Automatically backs up multiple Laravel projects (source code + database) and up
 ## Quick Install for End Users (One Command)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nht2312/pkg-auto-backup-laravel-project/main/install-remote.sh | bash -s -- --repo nht2312/pkg-auto-backup-laravel-project
+curl -fsSL https://raw.githubusercontent.com/nht2312/pkg-auto-backup-laravel-project-telegram/main/install-remote.sh | bash -s -- --repo nht2312/pkg-auto-backup-laravel-project-telegram
 ```
 
 This script will automatically:
@@ -100,7 +100,7 @@ Tự động backup nhiều dự án Laravel (source code + database) và upload
 ## Cài nhanh cho người dùng cuối (1 lệnh)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nht2312/pkg-auto-backup-laravel-project/main/install-remote.sh | bash -s -- --repo nht2312/pkg-auto-backup-laravel-project
+curl -fsSL https://raw.githubusercontent.com/nht2312/pkg-auto-backup-laravel-project-telegram/main/install-remote.sh | bash -s -- --repo nht2312/pkg-auto-backup-laravel-project-telegram
 ```
 
 Script sẽ tự:
